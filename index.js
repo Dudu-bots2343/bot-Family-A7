@@ -89,12 +89,16 @@ client.once("ready", async () => {
         selfDeaf: false
       });
 
-      const player = createAudioPlayer();
-      const resource = createAudioResource("silencio.mp3");
-      player.play(resource);
-      connection.subscribe(player);
+     const call = client.channels.cache.get(CALL_24H);
+if (call) {
+  joinVoiceChannel({
+    channelId: call.id,
+    guildId: call.guild.id,
+    adapterCreator: call.guild.voiceAdapterCreator,
+    selfDeaf: false
+  });
 
-      console.log("🔊 Bot conectado na call 24h!");
+   console.log("🔊 Bot conectado na call 24h!");
     }
   } catch (err) {
     console.log("Erro ao conectar no VC:", err);
