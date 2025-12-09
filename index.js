@@ -295,115 +295,167 @@ const client = new Client({
     partials: [Partials.Message, Partials.Channel]
 });
 
-// === IDs dos canais ===
-const LOG_MSG = "ID_DO_CANAL_LOG_MENSAGENS";
-const LOG_CALL = "ID_DO_CANAL_LOG_CALL";
-const LOG_ROLES = "ID_DO_CANAL_LOG_CARGOS";
-
-
-// ======= LOG DE MENSAGEM ENVIADA =======
-client.on("messageCreate", (message) => {
-    if (message.author.bot) return;
-
-    const embed = new EmbedBuilder()
-        .setColor("#ff0062")
-        .setTitle("📩 Nova mensagem")
-        .setDescription(`**Autor:** ${message.author}\n**Canal:** ${message.channel}\n**Mensagem:**\n${message.content}`)
-        .setTimestamp();
-
-    client.channels.cache.get(LOG_MSG).send({ embeds: [embed] });
-});
-
-
-// ======= EDITOU MENSAGEM =======
-client.on("messageUpdate", (oldM, newM) => {
-    if (!oldM.content || !newM.content) return;
-
-    const embed = new EmbedBuilder()
-        .setColor("#0099ff")
-        .setTitle("✏ Mensagem editada")
-        .setDescription(
-            `**Autor:** ${newM.author}\n**Canal:** ${newM.channel}\n\n**Antes:**\n${oldM.content}\n\n**Depois:**\n${newM.content}`
-        )
-        .setTimestamp();
-
-    client.channels.cache.get(LOG_MSG).send({ embeds: [embed] });
-});
-
-
-// ======= MENSAGEM APAGADA =======
-client.on("messageDelete", (message) => {
-    const embed = new EmbedBuilder()
-        .setColor("#ff0000")
-        .setTitle("🗑 Mensagem deletada")
-        .setDescription(
-            `**Autor:** ${message.author}\n**Canal:** ${message.channel}\n\n**Conteúdo:**\n${message.content}`
-        )
-        .setTimestamp();
-
-    client.channels.cache.get(LOG_MSG).send({ embeds: [embed] });
-});
-
-
-
-// ======= LOG VOICE =======
-client.on("voiceStateUpdate", (oldState, newState) => {
-    const user = newState.member;
-
-    let texto = "";
-
-    if (!oldState.channel && newState.channel)
-        texto = `🔊 Entrou no call: **${newState.channel.name}**`;
-
-    if (oldState.channel && !newState.channel)
-        texto = `📴 Saiu do call: **${oldState.channel.name}**`;
-
-    if (oldState.channelId !== newState.channelId && oldState.channel && newState.channel)
-        texto = `➡ Moveu do **${oldState.channel.name}** para **${newState.channel.name}**`;
-
-    if (!texto) return;
-
-    const embed = new EmbedBuilder()
-        .setColor("#00ff9d")
-        .setTitle("🎧 Log de Call")
-        .setDescription(`**Usuário:** ${user}\n${texto}`)
-        .setTimestamp();
-
-    client.channels.cache.get(LOG_CALL).send({ embeds: [embed] });
-});
-
-
-
-// ======= LOG DE CARGO =======
-client.on("guildMemberUpdate", (oldM, newM) => {
-    const addedRoles = newM.roles.cache.filter(role => !oldM.roles.cache.has(role.id));
-    const removedRoles = oldM.roles.cache.filter(role => !newM.roles.cache.has(role.id));
-
-    addedRoles.forEach(role => {
-        const embed = new EmbedBuilder()
-            .setColor("#00ff00")
-            .setTitle("🟢 Cargo adicionado")
-            .setDescription(`**Usuário:** ${newM}\n**Cargo:** ${role}`)
-            .setTimestamp();
-        client.channels.cache.get(LOG_ROLES).send({ embeds: [embed] });
-    });
-
-    removedRoles.forEach(role => {
-        const embed = new EmbedBuilder()
-            .setColor("#ff0000")
-            .setTitle("🔴 Cargo removido")
-            .setDescription(`**Usuário:** ${newM}\n**Cargo:** ${role}`)
-            .setTimestamp();
-        client.channels.cache.get(LOG_ROLES).send({ embeds: [embed] });
-    });
-});
-
 // ====================== SERVIDOR PERMITIDO ======================
 client.on("guildCreate", guild => {
   if (guild.id !== SERVIDOR_PERMITIDO) {
     console.log(`❌ Servidor não autorizado: ${guild.name} — Saindo...`);
     guild.leave();
   }
+});
+// ====================== LOGS AUTOMÁTICOS ============================
+const {
+  EmbedBuilder,
+  AuditLogEvent
+} = require("discord.js");
+
+// ====== COLOQUE AQUI O ID DOS CANAIS ======
+const LOG_MSG = process.env.LOG_MENSAGENS;
+const LOG_CALL = process.env.LOG_VOZ;
+const LOG_ROLES = process.env.LOG_CARGOS;
+
+
+// ========= MENSAGEM ENVIADA ==========
+client.on("messageCreate", async (message) => {
+  if (message.author.bot) return;
+  const canal = client.channels.cache.get(LOG_MSG);
+
+  canal.send({
+    embeds: [
+      new EmbedBuilder()
+        .setColor("#ffd000")
+        .setTitle("📩 Mensagem enviada")
+        .setDescription(
+          `**Autor:** ${message.author}\n` +
+          `**Canal:** ${message.channel}\n\n` +
+          `**Conteúdo:**\n${message.content}`
+        )
+        .setTimestamp()
+    ]
+  });
+});
+
+
+// ========= MENSAGEM EDITADA ==========
+client.on("messageUpdate", async (oldMsg, newMsg) => {
+  if (!oldMsg.content || !newMsg.content) return;
+  if (newMsg.author.bot) return;
+
+  const canal = client.channels.cache.get(LOG_MSG);
+
+  canal.send({
+    embeds: [
+      new EmbedBuilder()
+        .setColor("#00c8ff")
+        .setTitle("✏ Mensagem editada")
+        .addFields(
+          { name: "Autor", value: `${newMsg.author}`, inline: false },
+          { name: "Antes", value: oldMsg.content, inline: false },
+          { name: "Depois", value: newMsg.content, inline: false },
+        )
+        .setTimestamp()
+    ]
+  });
+});
+
+
+// ========= MENSAGEM DELETADA (quem deletou) ==========
+client.on("messageDelete", async (message) => {
+  const canal = client.channels.cache.get(LOG_MSG);
+
+  let executor = "autor deletou ou não foi possível identificar";
+
+  try {
+    const logs = await message.guild.fetchAuditLogs({
+      limit: 1,
+      type: AuditLogEvent.MessageDelete,
+    });
+
+    const log = logs.entries.first();
+    if (log) executor = log.executor;
+  } catch {}
+
+  canal.send({
+    embeds: [
+      new EmbedBuilder()
+        .setColor("#ff0000")
+        .setTitle("🗑 Mensagem deletada")
+        .setDescription(
+          `**Autor da mensagem:** ${message.author}\n` +
+          `**Deletado por:** ${executor}\n\n` +
+          `**Conteúdo:**\n${message.content || "*Mensagem embed ou sem conteúdo*"}`
+        )
+        .setTimestamp()
+    ]
+  });
+});
+
+
+// ========= LOG CALL ==========
+client.on("voiceStateUpdate", (oldS, newS) => {
+  const user = newS.member;
+  const canal = client.channels.cache.get(LOG_CALL);
+
+  let texto = "";
+
+  if (!oldS.channel && newS.channel)
+    texto = `🔊 Entrou em **${newS.channel.name}**`;
+
+  else if (oldS.channel && !newS.channel)
+    texto = `📴 Saiu de **${oldS.channel.name}**`;
+
+  else if (oldS.channelId !== newS.channelId && oldS.channel && newS.channel)
+    texto = `➡ Moveu: **${oldS.channel.name}** → **${newS.channel.name}**`;
+
+  else if (oldS.selfMute !== newS.selfMute)
+    texto = newS.selfMute ? "🔇 Mutou o próprio microfone" : "🔊 Desmutou";
+
+  else if (oldS.selfDeaf !== newS.selfDeaf)
+    texto = newS.selfDeaf ? "🙉 Desligou áudio" : "🎧 Ligou áudio";
+
+  if (!texto) return;
+
+  canal.send({
+    embeds: [
+      new EmbedBuilder()
+        .setColor("#00ff9d")
+        .setTitle("🎧 Log de Call")
+        .setDescription(`**Usuário:** ${user}\n${texto}`)
+        .setTimestamp()
+    ]
+  });
+});
+
+
+// ========= LOG CARGO (add/remove) ==========
+client.on("guildMemberUpdate", (oldM, newM) => {
+  const canal = client.channels.cache.get(LOG_ROLES);
+
+  const add = newM.roles.cache.filter(r => !oldM.roles.cache.has(r.id));
+  const rem = oldM.roles.cache.filter(r => !newM.roles.cache.has(r.id));
+
+  add.forEach(role => {
+    canal.send({
+      embeds: [
+        new EmbedBuilder()
+          .setColor("#00ff00")
+          .setTitle("🟢 Cargo adicionado")
+          .setDescription(`**Usuário:** ${newM}\n**Cargo:** ${role}`)
+          .setTimestamp()
+      ]
+    });
+  });
+
+  rem.forEach(role => {
+    canal.send({
+      embeds: [
+        new EmbedBuilder()
+          .setColor("#ff0000")
+          .setTitle("🔴 Cargo removido")
+          .setDescription(`**Usuário:** ${newM}\n**Cargo:** ${role}`)
+          .setTimestamp()
+      ]
+    });
+  });
 });
 
 // ====================== LOGIN ======================
