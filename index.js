@@ -294,150 +294,204 @@ client.on("guildCreate", guild => {
   }
 });
 
-// ====================== LOGS AUTOMÁTICOS ============================
-const LOG_MSG = LOG_MENSAGENS;
-const LOG_CALL = LOG_VOZ;
-const LOG_ROLES = LOG_CARGOS;
+// =========================
+// BOT DE LOGS COMPLETO
+// =========================
 
-// ========= MENSAGEM ENVIADA ==========
-client.on("messageCreate", async (message) => {
-  if (message.author.bot) return;
-  const canal = client.channels.cache.get(LOG_MSG);
+require("dotenv").config();
 
-  canal.send({
-    embeds: [
-      new EmbedBuilder()
-        .setColor("#ffd000")
-        .setTitle("📩 Mensagem enviada")
-        .setDescription(
-          `**Autor:** ${message.author}\n` +
-          `**Canal:** ${message.channel}\n\n` +
-          `**Conteúdo:**\n${message.content}`
-        )
-        .setTimestamp()
-    ]
-  });
+const { 
+  Client,
+  GatewayIntentBits,
+  EmbedBuilder,
+  Partials
+} = require("discord.js");
+
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates
+  ],
+  partials: [Partials.Message, Partials.Channel]
 });
 
-// ========= MENSAGEM EDITADA ==========
-client.on("messageUpdate", async (oldMsg, newMsg) => {
-  if (!oldMsg.content || !newMsg.content) return;
-  if (newMsg.author.bot) return;
 
-  const canal = client.channels.cache.get(LOG_MSG);
+// =========================
+// IDS .ENV
+// =========================
 
-  canal.send({
+const LOG_MSG = process.env.LOG_MENSAGENS;
+const LOG_EDIT = process.env.LOG_MENSAGENS;
+const LOG_DELETE = process.env.LOG_MENSAGENS;
+const LOG_VOICE = process.env.LOG_VOZ;
+const LOG_ROLE = process.env.LOG_CARGOS;
+
+
+// =========================
+// OBJETO PADRÃO (ESTILO DA IMAGEM)
+// =========================
+
+function cardFormat(title, user, channel, content, color = "#2f3136") {
+  return {
     embeds: [
       new EmbedBuilder()
-        .setColor("#00c8ff")
-        .setTitle("✏ Mensagem editada")
+        .setTitle(title)
+        .setColor(color)
         .addFields(
-          { name: "Autor", value: `${newMsg.author}`, inline: false },
-          { name: "Antes", value: oldMsg.content, inline: false },
-          { name: "Depois", value: newMsg.content, inline: false },
+          {
+            name: "👤 Autor",
+            value: `${user} (\`${user.id}\`)`
+          },
+          channel ? {
+            name: "📌 Canal",
+            value: `${channel}`
+          } : null,
+          {
+            name: "💬 Conteúdo",
+            value: content
+          }
         )
+        .setThumbnail(user.displayAvatarURL({ dynamic: true }))
         .setTimestamp()
     ]
-  });
-});
+  }
+}
 
-// ========= MENSAGEM DELETADA ==========
-client.on("messageDelete", async (message) => {
+
+// =========================
+// NOVA MENSAGEM
+// =========================
+
+client.on("messageCreate", async msg => {
+  if (msg.author.bot) return;
+  
   const canal = client.channels.cache.get(LOG_MSG);
+  if (!canal) return;
 
-  let executor = "autor deletou ou não foi possível identificar";
-
-  try {
-    const logs = await message.guild.fetchAuditLogs({
-      limit: 1,
-      type: AuditLogEvent.MessageDelete,
-    });
-
-    const log = logs.entries.first();
-    if (log) executor = log.executor;
-  } catch {}
-
-  canal.send({
-    embeds: [
-      new EmbedBuilder()
-        .setColor("#ff0000")
-        .setTitle("🗑 Mensagem deletada")
-        .setDescription(
-          `**Autor da mensagem:** ${message.author}\n` +
-          `**Deletado por:** ${executor}\n\n` +
-          `**Conteúdo:**\n${message.content || "*Mensagem embed ou sem conteúdo*"}`
-        )
-        .setTimestamp()
-    ]
-  });
+  canal.send(cardFormat(
+    "📝 Nova mensagem",
+    msg.author,
+    `<#${msg.channel.id}>`,
+    msg.content || "(sem conteúdo)"
+  ));
 });
 
-// ========= LOG CALL ==========
-client.on("voiceStateUpdate", (oldS, newS) => {
-  const user = newS.member;
-  const canal = client.channels.cache.get(LOG_CALL);
 
-  let texto = "";
+// =========================
+// MSG EDITADA
+// =========================
 
-  if (!oldS.channel && newS.channel)
-    texto = `🔊 Entrou em **${newS.channel.name}**`;
+client.on("messageUpdate", async (oldMsg, newMsg) => {
+  if (!newMsg || !oldMsg) return;
+  if (newMsg.author.bot) return;
+  if (oldMsg.content === newMsg.content) return;
 
-  else if (oldS.channel && !newS.channel)
-    texto = `📴 Saiu de **${oldS.channel.name}**`;
+  const canal = client.channels.cache.get(LOG_EDIT);
+  if (!canal) return;
 
-  else if (oldS.channelId !== newS.channelId && oldS.channel && newS.channel)
-    texto = `➡ Moveu: **${oldS.channel.name}** → **${newS.channel.name}**`;
-
-  else if (oldS.selfMute !== newS.selfMute)
-    texto = newS.selfMute ? "🔇 Mutou o próprio microfone" : "🔊 Desmutou";
-
-  else if (oldS.selfDeaf !== newS.selfDeaf)
-    texto = newS.selfDeaf ? "🙉 Desligou áudio" : "🎧 Ligou áudio";
-
-  if (!texto) return;
-
-  canal.send({
-    embeds: [
-      new EmbedBuilder()
-        .setColor("#00ff9d")
-        .setTitle("🎧 Log de Call")
-        .setDescription(`**Usuário:** ${user}\n${texto}`)
-        .setTimestamp()
-    ]
-  });
+  canal.send(cardFormat(
+    "✏ Mensagem editada",
+    newMsg.author,
+    `<#${newMsg.channel.id}>`,
+    `✒ **Antes:**\n${oldMsg.content}\n\n🆕 **Depois:**\n${newMsg.content}`
+  ));
 });
 
-// ========= LOG CARGO ==========
-client.on("guildMemberUpdate", (oldM, newM) => {
-  const canal = client.channels.cache.get(LOG_ROLES);
 
-  const add = newM.roles.cache.filter(r => !oldM.roles.cache.has(r.id));
-  const rem = oldM.roles.cache.filter(r => !newM.roles.cache.has(r.id));
+// =========================
+// MSG APAGADA
+// =========================
 
-  add.forEach(role => {
-    canal.send({
-      embeds: [
-        new EmbedBuilder()
-          .setColor("#00ff00")
-          .setTitle("🟢 Cargo adicionado")
-          .setDescription(`**Usuário:** ${newM}\n**Cargo:** ${role}`)
-          .setTimestamp()
-      ]
-    });
-  });
+client.on("messageDelete", async msg => {
+  if (!msg) return;
 
-  rem.forEach(role => {
-    canal.send({
-      embeds: [
-        new EmbedBuilder()
-          .setColor("#ff0000")
-          .setTitle("🔴 Cargo removido")
-          .setDescription(`**Usuário:** ${newM}\n**Cargo:** ${role}`)
-          .setTimestamp()
-      ]
-    });
-  });
+  const canal = client.channels.cache.get(LOG_DELETE);
+  if (!canal) return;
+
+  canal.send(cardFormat(
+    "🗑 Mensagem deletada",
+    msg.author,
+    `<#${msg.channel.id}>`,
+    msg.content || "(sem conteúdo)"
+  ));
 });
 
-// ====================== LOGIN ======================
-client.login(TOKEN);
+
+// =========================
+// VOICE
+// =========================
+
+client.on("voiceStateUpdate", (oldState, newState) => {
+  const canal = client.channels.cache.get(LOG_VOICE);
+  if (!canal) return;
+
+  const member = newState.member || oldState.member;
+  let action, text;
+
+  if (!oldState.channel && newState.channel) {
+    action = "🎧 Entrou no canal";
+    text = newState.channel.name;
+  }
+  else if (oldState.channel && !newState.channel) {
+    action = "📤 Saiu do canal";
+    text = oldState.channel.name;
+  }
+  else if (oldState.channel?.id !== newState.channel?.id) {
+    action = "🔃 Moveu de canal";
+    text = `${oldState.channel.name} ➝ ${newState.channel.name}`;
+  }
+  else return;
+
+  canal.send(cardFormat(
+    action,
+    member.user,
+    null,
+    `\`\`\`${text}\`\`\``
+  ));
+});
+
+
+// =========================
+// CARGOS
+// =========================
+
+client.on("guildMemberUpdate", (oldMember, newMember) => {
+  const canal = client.channels.cache.get(LOG_ROLE);
+  if (!canal) return;
+
+  const oldRoles = oldMember.roles.cache.map(r => r.id);
+  const newRoles = newMember.roles.cache.map(r => r.id);
+
+  const added = newRoles.find(r => !oldRoles.includes(r));
+  const removed = oldRoles.find(r => !newRoles.includes(r));
+
+  if (added) {
+    canal.send(cardFormat(
+      "➕ Cargo adicionado",
+      newMember.user,
+      null,
+      `<@&${added}>`,
+      "#43b581"
+    ));
+  }
+
+  if (removed) {
+    canal.send(cardFormat(
+      "➖ Cargo removido",
+      newMember.user,
+      null,
+      `<@&${removed}>`,
+      "#faa61a"
+    ));
+  }
+});
+
+
+// =========================
+// LOGIN
+// =========================
+
+client.login(process.env.TOKEN);
