@@ -1,5 +1,5 @@
 {
-  "name": "bot-familia-a7",
+  "name": "bot-family-a7",
   "version": "1.0.0",
   "description": "Bot Discord Família A7",
   "main": "index.js",
@@ -20,3 +20,4 @@
     "opusscript": "0.0.8",
     "ws": "8.18.0"
   }
+}
