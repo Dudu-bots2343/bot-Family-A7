@@ -1,7 +1,7 @@
 {
   "name": "bot-family-a7",
   "version": "1.0.0",
-  "description": "Bot Discord Família A7",
+  "description": "Bot Discord Familia A7",
   "main": "index.js",
   "type": "module",
   "scripts": {
