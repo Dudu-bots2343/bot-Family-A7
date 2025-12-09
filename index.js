@@ -153,10 +153,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
             await membro.setNickname(`A7 ${nomeInformado}`);
             await membro.roles.add([CARGO_APROVADO, CARGO_APROVADO_2]);
 
-            const mensagem = `<a:coroa4:1425236745762504768> **Seja Muito Bem-vindo à Family Do7 ** <:emojia7:1429141492080967730>
+            const mensagem = `<a:coroa4:1425236745762504768> **Seja Muito Bem-vindo à Family A7 ** <:emojia7:1429141492080967730>
 
-** Parabéns! Agora vc e um membro oficial da Family Do7 , Seu set foi aceito , um lugar onde a vibe é diferente,
+
+** Parabéns! Agora vc e um membro oficial da Family A7 , 
+Seu set foi aceito , um lugar onde a vibe é diferente,
 A resenha aqui e 24 horas por dia, a energia é única e cada pessoa soma do seu próprio jeito... **
+
 
 ✨ **Seja muito bem-vindo!** ✨**`;
 
