@@ -294,30 +294,6 @@ client.on("guildCreate", guild => {
   }
 });
 
-// =========================
-// BOT DE LOGS COMPLETO
-// =========================
-
-require("dotenv").config();
-
-const { 
-  Client,
-  GatewayIntentBits,
-  EmbedBuilder,
-  Partials
-} = require("discord.js");
-
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildVoiceStates
-  ],
-  partials: [Partials.Message, Partials.Channel]
-});
-
 
 // =========================
 // IDS .ENV
