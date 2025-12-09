@@ -300,68 +300,87 @@ client.on("guildCreate", guild => {
 
 
 // =========================
-// IDS .ENV
+// BOT DE LOGS COMPLETO
 // =========================
 
-const LOG_MSG = process.env.LOG_MENSAGENS;
-const LOG_EDIT = process.env.LOG_MENSAGENS;
-const LOG_DELETE = process.env.LOG_MENSAGENS;
-const LOG_VOICE = process.env.LOG_VOZ;
-const LOG_ROLE = process.env.LOG_CARGOS;
+require("dotenv").config();
+
+const { 
+  Client,
+  GatewayIntentBits,
+  EmbedBuilder,
+  Partials,
+  PermissionsBitField
+} = require("discord.js");
+
+// ATENÇÃO: removi createAudioPlayer/createAudioResource
+const { joinVoiceChannel } = require("@discordjs/voice");
+
+
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates
+  ],
+  partials: [Partials.Message, Partials.Channel]
+});
+
+// =========================
+// IDS DOS CANAIS VINDO DO .ENV
+// =========================
+
+const logs = {
+  msg: process.env.LOG_MENSAGENS,
+  edit: process.env.LOG_MENSAGENS,
+  delete: process.env.LOG_MENSAGENS,
+  voice: process.env.LOG_VOZ,
+  role: process.env.LOG_CARGOS
+};
 
 
 // =========================
-// OBJETO PADRÃO (ESTILO DA IMAGEM)
+//   OBJETO PADRAO EMBED
 // =========================
 
-function cardFormat(title, user, channel, content, color = "#2f3136") {
-  return {
-    embeds: [
-      new EmbedBuilder()
-        .setTitle(title)
-        .setColor(color)
-        .addFields(
-          {
-            name: "👤 Autor",
-            value: `${user} (\`${user.id}\`)`
-          },
-          channel ? {
-            name: "📌 Canal",
-            value: `${channel}`
-          } : null,
-          {
-            name: "💬 Conteúdo",
-            value: content
-          }
-        )
-        .setThumbnail(user.displayAvatarURL({ dynamic: true }))
-        .setTimestamp()
-    ]
-  }
+function logEmbed(title, user, desc, color = "#2f3136") {
+  return new EmbedBuilder()
+    .setTitle(title)
+    .setDescription(desc)
+    .addFields({
+      name: "Autor",
+      value: `${user.tag} (\`${user.id}\`)`
+    })
+    .setColor(color)
+    .setThumbnail(user.displayAvatarURL({ dynamic: true }))
+    .setTimestamp();
 }
 
 
 // =========================
-// NOVA MENSAGEM
+//   LOG – MENSAGEM ENVIADA
 // =========================
 
-client.on("messageCreate", async msg => {
+client.on("messageCreate", async (msg) => {
   if (msg.author.bot) return;
-  
-  const canal = client.channels.cache.get(LOG_MSG);
-  if (!canal) return;
 
-  canal.send(cardFormat(
-    "📝 Nova mensagem",
+  const channel = client.channels.cache.get(logs.msg);
+  if (!channel) return;
+
+  const embed = logEmbed(
+    "💬 Mensagem Enviada",
     msg.author,
-    `<#${msg.channel.id}>`,
-    msg.content || "(sem conteúdo)"
-  ));
+    `**Canal:** <#${msg.channel.id}>\n\n\`\`\`${msg.content}\`\`\``
+  );
+
+  channel.send({ embeds: [embed] });
 });
 
 
 // =========================
-// MSG EDITADA
+//   LOG – MENSAGEM EDITADA
 // =========================
 
 client.on("messageUpdate", async (oldMsg, newMsg) => {
@@ -369,16 +388,132 @@ client.on("messageUpdate", async (oldMsg, newMsg) => {
   if (newMsg.author.bot) return;
   if (oldMsg.content === newMsg.content) return;
 
-  const canal = client.channels.cache.get(LOG_EDIT);
-  if (!canal) return;
+  const channel = client.channels.cache.get(logs.edit);
+  if (!channel) return;
 
-  canal.send(cardFormat(
-    "✏ Mensagem editada",
+  const embed = logEmbed(
+    "✏ Mensagem Editada",
     newMsg.author,
-    `<#${newMsg.channel.id}>`,
-    `✒ **Antes:**\n${oldMsg.content}\n\n🆕 **Depois:**\n${newMsg.content}`
-  ));
+    `**Canal:** <#${newMsg.channel.id}>\n\n**Antes:**\n\`\`\`${oldMsg.content}\`\`\`\n**Depois:**\n\`\`\`${newMsg.content}\`\`\``,
+    "#ffcc00"
+  );
+
+  channel.send({ embeds: [embed] });
 });
+
+
+// =========================
+//   LOG – MENSAGEM DELETADA
+// =========================
+
+client.on("messageDelete", async (msg) => {
+  if (!msg) return;
+
+  const channel = client.channels.cache.get(logs.delete);
+  if (!channel) return;
+
+  const embed = logEmbed(
+    "🗑 Mensagem Deletada",
+    msg.author,
+    `**Canal:** <#${msg.channel.id}>\n\n\`\`\`${msg.content || "sem conteúdo"}\`\`\``,
+    "#ff0000"
+  );
+
+  channel.send({ embeds: [embed] });
+});
+
+
+// =========================
+//        LOG – CALL
+// =========================
+
+client.on("voiceStateUpdate", (oldState, newState) => {
+  const channel = client.channels.cache.get(logs.voice);
+  if (!channel) return;
+
+  const member = newState.member || oldState.member;
+  
+  let action;
+
+  if (!oldState.channel && newState.channel) action = "Entrou na call";
+  else if (oldState.channel && !newState.channel) action = "Saiu da call";
+  else if (oldState.channel?.id !== newState.channel?.id) action = "Moveu de call";
+  else return;
+
+  const embed = logEmbed(
+    `🎧 ${action}`,
+    member.user,
+    `\`\`\`${member.voice.channel?.name || "Nenhuma"}\`\`\``,
+    "#7289da"
+  );
+
+  channel.send({ embeds: [embed] });
+});
+
+
+// =========================
+//     LOG – CARGOS
+// =========================
+
+client.on("guildMemberUpdate", (oldMember, newMember) => {
+  const channel = client.channels.cache.get(logs.role);
+  if (!channel) return;
+
+  const oldRoles = oldMember.roles.cache.map(r => r.id);
+  const newRoles = newMember.roles.cache.map(r => r.id);
+
+  const added = newRoles.filter(r => !oldRoles.includes(r));
+  const removed = oldRoles.filter(r => !newRoles.includes(r));
+
+  if (added.length > 0) {
+    const embed = logEmbed(
+      "➕ Cargo Adicionado",
+      newMember.user,
+      `<@&${added[0]}>`,
+      "#43b581"
+    );
+    channel.send({ embeds: [embed] });
+  }
+
+  if (removed.length > 0) {
+    const embed = logEmbed(
+      "➖ Cargo Removido",
+      newMember.user,
+      `<@&${removed[0]}>`,
+      "#faa61a"
+    );
+    channel.send({ embeds: [embed] });
+  }
+});
+
+
+// =========================
+//   INICIO
+// =========================
+
+client.once("ready", () => {
+
+  // call 24h totalmente intacta (apenas removida a duplicada)
+  try {
+    const call = client.channels.cache.get(process.env.CALL_24H);
+    if (call) {
+      joinVoiceChannel({
+        channelId: call.id,
+        guildId: call.guild.id,
+        adapterCreator: call.guild.voiceAdapterCreator,
+        selfDeaf: false
+      });
+      console.log("🔊 Bot conectado na call 24h!");
+    }
+  } catch (err) {
+    console.log("Erro ao conectar no VC:", err);
+  }
+
+  console.log("🤖 Bot ligado!");
+});
+
+
+client.login(process.env.TOKEN);
 
 
 // =========================
