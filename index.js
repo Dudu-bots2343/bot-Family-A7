@@ -19,7 +19,8 @@ const {
   TextInputBuilder,
   TextInputStyle,
   Events,
-  AuditLogEvent
+  AuditLogEvent,
+  Partials
 } = require("discord.js");
 
 const {
@@ -34,7 +35,9 @@ const client = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates
   ],
+  partials: [Partials.Message, Partials.Channel]
 });
 
 // ====================== VARIÁVEIS .ENV ==================
@@ -87,7 +90,7 @@ client.once("ready", async () => {
       });
 
       const player = createAudioPlayer();
-      const resource = createAudioResource("silencio.mp3"); 
+      const resource = createAudioResource("silencio.mp3");
       player.play(resource);
       connection.subscribe(player);
 
@@ -283,18 +286,6 @@ client.on("messageCreate", async (message) => {
   }, 5000);
 });
 
-const { Client, GatewayIntentBits, EmbedBuilder, Partials } = require("discord.js");
-const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildVoiceStates
-    ],
-    partials: [Partials.Message, Partials.Channel]
-});
-
 // ====================== SERVIDOR PERMITIDO ======================
 client.on("guildCreate", guild => {
   if (guild.id !== SERVIDOR_PERMITIDO) {
@@ -302,17 +293,11 @@ client.on("guildCreate", guild => {
     guild.leave();
   }
 });
+
 // ====================== LOGS AUTOMÁTICOS ============================
-const {
-  EmbedBuilder,
-  AuditLogEvent
-} = require("discord.js");
-
-// ====== COLOQUE AQUI O ID DOS CANAIS ======
-const LOG_MSG = process.env.LOG_MENSAGENS;
-const LOG_CALL = process.env.LOG_VOZ;
-const LOG_ROLES = process.env.LOG_CARGOS;
-
+const LOG_MSG = LOG_MENSAGENS;
+const LOG_CALL = LOG_VOZ;
+const LOG_ROLES = LOG_CARGOS;
 
 // ========= MENSAGEM ENVIADA ==========
 client.on("messageCreate", async (message) => {
@@ -333,7 +318,6 @@ client.on("messageCreate", async (message) => {
     ]
   });
 });
-
 
 // ========= MENSAGEM EDITADA ==========
 client.on("messageUpdate", async (oldMsg, newMsg) => {
@@ -357,8 +341,7 @@ client.on("messageUpdate", async (oldMsg, newMsg) => {
   });
 });
 
-
-// ========= MENSAGEM DELETADA (quem deletou) ==========
+// ========= MENSAGEM DELETADA ==========
 client.on("messageDelete", async (message) => {
   const canal = client.channels.cache.get(LOG_MSG);
 
@@ -388,7 +371,6 @@ client.on("messageDelete", async (message) => {
     ]
   });
 });
-
 
 // ========= LOG CALL ==========
 client.on("voiceStateUpdate", (oldS, newS) => {
@@ -425,8 +407,7 @@ client.on("voiceStateUpdate", (oldS, newS) => {
   });
 });
 
-
-// ========= LOG CARGO (add/remove) ==========
+// ========= LOG CARGO ==========
 client.on("guildMemberUpdate", (oldM, newM) => {
   const canal = client.channels.cache.get(LOG_ROLES);
 
