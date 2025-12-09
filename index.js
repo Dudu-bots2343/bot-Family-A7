@@ -1,8 +1,6 @@
 // ====================== KEEP ALIVE ======================
 const express = require("express");
 const app = express();
-
-// Página inicial para o UptimeRobot pingar
 app.get("/", (req, res) => res.send("Bot ativo e rodando 24h! 🚀"));
 app.listen(3000, () => console.log("🌐 KeepAlive ativo na porta 3000!"));
 
@@ -24,6 +22,12 @@ const {
   AuditLogEvent
 } = require("discord.js");
 
+const {
+  joinVoiceChannel,
+  createAudioPlayer,
+  createAudioResource
+} = require("@discordjs/voice");
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -33,24 +37,29 @@ const client = new Client({
   ],
 });
 
-// ====================== VARIÁVEIS DO .ENV ======================
-const CANAL_PEDIR_SET = process.env.CANAL_PEDIR_SET;
-const CANAL_ACEITA_SET = process.env.CANAL_ACEITA_SET;
-const CARGO_APROVADO = process.env.CARGO_APROVADO;
-const CARGO_APROVADO_2 = process.env.CARGO_APROVADO_2;
-const TOKEN = process.env.TOKEN;
+// ====================== VARIÁVEIS .ENV ==================
+const {
+  CANAL_PEDIR_SET,
+  CANAL_ACEITA_SET,
+  CARGO_APROVADO,
+  CARGO_APROVADO_2,
+  TOKEN,
+  CALL_24H,
+  LOG_MENSAGENS,
+  LOG_VOZ,
+  LOG_CARGOS,
+  SERVIDOR_PERMITIDO
+} = process.env;
 
-// ====================== BOT ONLINE ========================
-client.on("ready", async () => {
+// ====================== BOT ONLINE ======================
+client.once("ready", async () => {
   console.log(`🤖 Bot ligado como ${client.user.tag}`);
 
   const canal = await client.channels.fetch(CANAL_PEDIR_SET);
 
   const embed = new EmbedBuilder()
     .setTitle("Sistema Família Do7")
-    .setDescription(
-      "Registro A7.\n\n Solicite SET usando o botão abaixo.\nPreencha com atenção!"
-    )
+    .setDescription("Registro A7.\n\n Solicite SET usando o botão abaixo.\nPreencha com atenção!")
     .addFields({
       name: "📌 Lembretes",
       value: "• A resenha aqui é garantida.\n• Não leve tudo a sério."
@@ -65,10 +74,33 @@ client.on("ready", async () => {
   );
 
   await canal.send({ embeds: [embed], components: [btn] });
-  console.log("📩 Mensagem de registro enviada!");
+
+  // Conectar ao canal 24h
+  try {
+    const call = client.channels.cache.get(CALL_24H);
+    if (call) {
+      const connection = joinVoiceChannel({
+        channelId: call.id,
+        guildId: call.guild.id,
+        adapterCreator: call.guild.voiceAdapterCreator,
+        selfDeaf: false
+      });
+
+      const player = createAudioPlayer();
+      const resource = createAudioResource("silencio.mp3"); 
+      player.play(resource);
+      connection.subscribe(player);
+
+      console.log("🔊 Bot conectado na call 24h!");
+    }
+  } catch (err) {
+    console.log("Erro ao conectar no VC:", err);
+  }
+
+  console.log("📩 Sistema carregado com sucesso!");
 });
 
-// ====================== ABRIR MODAL ========================
+// ====================== ABRIR MODAL ======================
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return;
   if (interaction.customId !== "abrirRegistro") return;
@@ -97,7 +129,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   await interaction.showModal(modal);
 });
 
-// ====================== RECEBER FORM ========================
+// ====================== RECEBER FORM ======================
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isModalSubmit()) return;
   if (interaction.customId !== "modalRegistro") return;
@@ -117,9 +149,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       { name: "ID Informado", value: iduser },
       {
         name: "Conta Criada em",
-        value: `<t:${Math.floor(
-          interaction.user.createdTimestamp / 1000
-        )}:R>`
+        value: `<t:${Math.floor(interaction.user.createdTimestamp / 1000)}:R>`
       }
     );
 
@@ -128,6 +158,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       .setCustomId(`aprovar_${interaction.user.id}`)
       .setLabel("Aprovar")
       .setStyle(ButtonStyle.Success),
+
     new ButtonBuilder()
       .setCustomId(`negar_${interaction.user.id}`)
       .setLabel("Negar")
@@ -152,24 +183,24 @@ client.on(Events.InteractionCreate, async (interaction) => {
   const membro = await interaction.guild.members.fetch(userId);
   const embedOriginal = interaction.message.embeds[0];
 
-  const nomeInformado = embedOriginal.fields.find((f) => f.name === "Nome Informado")?.value;
-  const idInformado = embedOriginal.fields.find((f) => f.name === "ID Informado")?.value;
+  const nomeInformado = embedOriginal.fields.find(f => f.name === "Nome Informado")?.value;
+  const idInformado = embedOriginal.fields.find(f => f.name === "ID Informado")?.value;
 
-  // ========== APROVAR ==========
   if (acao === "aprovar") {
     try {
       await membro.setNickname(`A7 ${nomeInformado}`);
+
       await membro.roles.add([
         CARGO_APROVADO,
         CARGO_APROVADO_2,
       ]);
 
-      const mensagem =
-        "<a:coroa4:1425236745762504768> **Seja Muito Bem-vindo à Family Do7** <:emojia7:1429141492080967730>\n\n" +
-        "**Parabéns! Agora você é um membro oficial da Family Do7!**\n" +
-        "O set foi aceito. A vibe aqui é diferente e a resenha é 24h.\n\n✨ **Seja muito bem-vindo!** ✨";
+      await membro.send(`
+<a:coroa4:1425236745762504768> **Seja Muito Bem-vindo à Family Do7 ** <:emojia7:1429141492080967730>
 
-      await membro.send(mensagem).catch(() => {});
+✨ **Seu set foi aceito!**  
+A vibe aqui é única. Aproveite o movimento!  
+      `).catch(() => { });
 
       const embedAprovado = new EmbedBuilder()
         .setColor("Green")
@@ -180,20 +211,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
           { name: "📛 Nome Informado:", value: `A7 ${nomeInformado}` },
           { name: "🧭 Acesso aprovado por:", value: `${interaction.user}` }
         )
-        .setThumbnail(membro.user.displayAvatarURL())
-        .setFooter({ text: "Aprovado com sucesso!" });
+        .setThumbnail(membro.user.displayAvatarURL());
 
-      await interaction.update({ embeds: [embedAprovado], components: [] });
+      await interaction.update({
+        embeds: [embedAprovado],
+        components: []
+      });
+
     } catch (e) {
       console.log(e);
       return interaction.reply({
         content: "❌ Erro ao aprovar. Verifique permissões.",
-        ephemeral: true,
+        ephemeral: true
       });
     }
   }
 
-  // ========== NEGAR ==========
   if (acao === "negar") {
     try {
       await membro.kick("Registro negado pelo aprovador.");
@@ -201,17 +234,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const embedNegado = new EmbedBuilder()
         .setColor("Red")
         .setTitle("Registro Negado")
-        .setDescription(
-          `❌ O usuário **${membro.user.tag}** foi expulso.\nNegado por: ${interaction.user}`
-        )
+        .setDescription(`❌ O usuário **${membro.user.tag}** foi expulso.\nNegado por: ${interaction.user}`)
         .setThumbnail(membro.user.displayAvatarURL());
 
-      await interaction.update({ embeds: [embedNegado], components: [] });
+      await interaction.update({
+        embeds: [embedNegado],
+        components: []
+      });
+
     } catch (e) {
       console.log(e);
       return interaction.reply({
         content: "❌ Não consegui expulsar o usuário.",
-        ephemeral: true,
+        ephemeral: true
       });
     }
   }
@@ -228,14 +263,12 @@ client.on("messageCreate", async (message) => {
 
   const members = await message.guild.members.fetch();
 
-  message.reply(
-    `📨 Enviando mensagem para **${members.size} membros**... Pode levar um tempo.`
-  );
+  message.reply(`📨 Enviando mensagem para **${members.size} membros**...`);
 
   let enviados = 0;
   let falhou = 0;
 
-  members.forEach((m) => {
+  members.forEach(m => {
     if (m.user.bot) return;
 
     m.send(`📩 **Familia A7 :**\n${texto}`)
@@ -245,47 +278,15 @@ client.on("messageCreate", async (message) => {
 
   setTimeout(() => {
     message.channel.send(
-      `✔️ Mensagens enviadas para **${enviados} membros**.\n⚠️ Falhou em **${falhou} membros** (DM fechada).`
+      `✔️ Enviado para **${enviados}** membros.\n⚠️ Falhou para **${falhou}** (DM fechada).`
     );
   }, 5000);
 });
 
-// ==================== BOT EM CALL 24H ====================
-const { joinVoiceChannel, createAudioPlayer, createAudioResource } = require("@discordjs/voice");
-
-client.on("ready", async () => {
-  try {
-    const canal = client.channels.cache.get(process.env.CALL_24H);
-    if (!canal) return console.log("❌ Canal de voz não encontrado!");
-
-    const conexao = joinVoiceChannel({
-      channelId: canal.id,
-      guildId: canal.guild.id,
-      adapterCreator: canal.guild.voiceAdapterCreator,
-      selfDeaf: false
-    });
-
-    const player = createAudioPlayer();
-    const resource = createAudioResource("silencio.mp3");
-    player.play(resource);
-
-    conexao.subscribe(player);
-    console.log("🔊 Bot conectado na call 24h!");
-  } catch (err) {
-    console.log("Erro ao conectar no VC:", err);
-  }
-});
-
-// ==================== SISTEMA DE LOGS ====================
-const canalMsg = process.env.LOG_MENSAGENS;
-const canalVoz = process.env.LOG_VOZ;
-const canalCargos = process.env.LOG_CARGOS;
-
-// MENSAGENS ENVIADAS
-client.on(Events.MessageCreate, async (msg) => {
+// =================== LOGS ===================
+client.on(Events.MessageCreate, async msg => {
   if (msg.author.bot) return;
-
-  let canal = client.channels.cache.get(canalMsg);
+  let canal = client.channels.cache.get(LOG_MENSAGENS);
 
   canal.send({
     embeds: [
@@ -295,74 +296,70 @@ client.on(Events.MessageCreate, async (msg) => {
         .addFields(
           { name: "👤 Autor", value: `${msg.author}` },
           { name: "📍 Canal", value: `${msg.channel}` },
-          { name: "💬 Conteúdo", value: `\`${msg.content}\`` }
+          { name: "💬 Conteúdo", value: `\`\`\`${msg.content}\`\`\`` }
         )
         .setTimestamp()
     ]
   });
 });
 
-// EDITADAS
-client.on(Events.MessageUpdate, async (antiga, nova) => {
-  if (!antiga.content || !nova.content) return;
+client.on(Events.MessageUpdate, async (oldMsg, newMsg) => {
+  if (!oldMsg.content || !newMsg.content) return;
 
-  let canal = client.channels.cache.get(canalMsg);
-
-  canal.send({
+  client.channels.cache.get(LOG_MENSAGENS).send({
     embeds: [
       new EmbedBuilder()
         .setColor("#ffcc00")
         .setTitle("✏ Mensagem Editada")
         .addFields(
-          { name: "👤 Autor", value: `${antiga.author}` },
-          { name: "Antes", value: `\`${antiga.content}\`` },
-          { name: "Depois", value: `\`${nova.content}\`` }
+          { name: "👤 Autor", value: `${oldMsg.author}` },
+          { name: "Antes", value: `\`\`\`${oldMsg.content}\`\`\`` },
+          { name: "Depois", value: `\`\`\`${newMsg.content}\`\`\`` }
         )
         .setTimestamp()
     ]
   });
 });
 
-// APAGADAS
-client.on(Events.MessageDelete, async (msg) => {
+client.on(Events.MessageDelete, async msg => {
   if (!msg.content) return;
 
-  let canal = client.channels.cache.get(canalMsg);
-
-  canal.send({
+  client.channels.cache.get(LOG_MENSAGENS).send({
     embeds: [
       new EmbedBuilder()
         .setColor("Red")
         .setTitle("🗑 Mensagem Apagada")
         .addFields(
           { name: "👤 Autor", value: `${msg.author}` },
-          { name: "Conteúdo", value: `\`${msg.content}\`` }
+          { name: "Conteúdo", value: `\`\`\`${msg.content}\`\`\`` }
         )
         .setTimestamp()
     ]
   });
 });
 
-// SPAM
+// Detectar SPAM
 const msgCount = {};
-client.on(Events.MessageCreate, (msg) => {
+client.on(Events.MessageCreate, msg => {
   if (msg.author.bot) return;
-
   if (!msgCount[msg.author.id]) msgCount[msg.author.id] = 0;
 
   msgCount[msg.author.id]++;
+
   setTimeout(() => msgCount[msg.author.id]--, 5000);
 
   if (msgCount[msg.author.id] >= 6) {
-    client.channels.cache.get(canalMsg).send(
-      `⚠ **Possível SPAM detectado!**\n👤 Usuário: ${msg.author}\n📍 Canal: ${msg.channel}`
+    client.channels.cache.get(LOG_MENSAGENS).send(
+      `⚠ **Possível SPAM detectado!**  
+👤 Usuário: ${msg.author}  
+Canal: ${msg.channel}`
     );
   }
 });
 
-// LOG CALL — ENTRAR / SAIR / MOVER
+// LOG DE CALL
 client.on(Events.VoiceStateUpdate, (oldState, newState) => {
-  let canal = client.channels.cache.get(canalVoz);
+  let canal = client.channels.cache.get(LOG_VOZ);
 
   if (!oldState.channel && newState.channel)
     canal.send(`🟢 **${newState.member.user.username} entrou** em 📞 ${newState.channel.name}`);
@@ -370,44 +367,30 @@ client.on(Events.VoiceStateUpdate, (oldState, newState) => {
   if (oldState.channel && !newState.channel)
     canal.send(`🔴 **${newState.member.user.username} saiu** da call`);
 
-  if (
-    oldState.channelId !== newState.channelId &&
-    oldState.channel &&
-    newState.channel
-  )
-    canal.send(
-      `🔁 **${newState.member.user.username} foi movido** de \`${oldState.channel.name}\` → \`${newState.channel.name}\``
-    );
+  if (oldState.channelId !== newState.channelId && oldState.channel && newState.channel)
+    canal.send(`🔁 **${newState.member.user.username} foi movido** \`${oldState.channel.name} → ${newState.channel.name}\``);
 });
 
-// LOG CARGOS
+// LOGS DE CARGOS
 client.on(Events.GuildMemberUpdate, (oldM, newM) => {
-  let canal = client.channels.cache.get(canalCargos);
+  let canal = client.channels.cache.get(LOG_CARGOS);
 
-  const removido = oldM.roles.cache.filter((r) => !newM.roles.cache.has(r.id));
-  const adicionado = newM.roles.cache.filter((r) => !oldM.roles.cache.has(r.id));
+  const removido = oldM.roles.cache.filter(r => !newM.roles.cache.has(r.id));
+  const adicionado = newM.roles.cache.filter(r => !oldM.roles.cache.has(r.id));
 
-  removido.forEach((role) =>
-    canal.send(`🔻 Cargo removido de ${newM.user}: **${role.name}**`)
-  );
-  adicionado.forEach((role) =>
-    canal.send(`🔺 Cargo adicionado ao ${newM.user}: **${role.name}**`)
-  );
+  removido.forEach(role => canal.send(`🔻 Cargo removido de ${newM.user}: **${role.name}**`));
+  adicionado.forEach(role => canal.send(`🔺 Cargo adicionado ao ${newM.user}: **${role.name}**`));
 });
 
-// Cargo criado/deletado
-client.on(Events.GuildRoleCreate, (role) => {
-  client.channels.cache.get(canalCargos).send(`🆕 Cargo **${role.name}** foi criado`);
+client.on(Events.GuildRoleCreate, role => {
+  client.channels.cache.get(LOG_CARGOS).send(`🆕 Cargo **${role.name}** foi criado`);
+});
+client.on(Events.GuildRoleDelete, role => {
+  client.channels.cache.get(LOG_CARGOS).send(`❌ Cargo **${role.name}** foi deletado`);
 });
 
-client.on(Events.GuildRoleDelete, (role) => {
-  client.channels.cache.get(canalCargos).send(`❌ Cargo **${role.name}** foi deletado`);
-});
-
-// ==================== BLOQUEAR OUTROS SERVIDORES ====================
-const SERVIDOR_PERMITIDO = process.env.SERVIDOR_PERMITIDO;
-
-client.on("guildCreate", (guild) => {
+// ====================== SERVIDOR PERMITIDO ======================
+client.on("guildCreate", guild => {
   if (guild.id !== SERVIDOR_PERMITIDO) {
     console.log(`❌ Servidor não autorizado: ${guild.name} — Saindo...`);
     guild.leave();
